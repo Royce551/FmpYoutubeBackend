@@ -61,9 +61,120 @@ namespace YoutubeLib
                 );
         }
 
-        public static async Task<Stream[]> GetStreamsAsync()
+        public async Task<Stream[]> GetStreamsAsync()
         {
+            var streams = new List<Stream>();
 
+            var data = await Util.GetPlayerData(VideoId);
+            if (data.playabilityStatus.status != "OK")
+                data = await Util.GetPlayerData(VideoId, true);
+            var streamingData = data.streamingData;
+
+            var formats = streamingData.formats;
+            foreach (var format in formats)
+            {
+                var url = format.url ?? await Util.DecypherSignatureUrlAsync(VideoId, format.signatureCipher);
+                var mimeType = format.mimeType;
+                var width = format.width;
+                var height = format.height;
+                var fps = format.fps;
+                VideoQuality videoQuality = default;
+                switch (format.quality)
+                {
+                    case "tiny":
+                        videoQuality = VideoQuality.Tiny;
+                        break;
+                    case "small":
+                        videoQuality = VideoQuality.Small;
+                        break;
+                    case "medium":
+                        videoQuality = VideoQuality.Medium;
+                        break;
+                    case "large":
+                        videoQuality = VideoQuality.Large;
+                        break;
+                    case "hd720":
+                        videoQuality = VideoQuality.HD720;
+                        break;
+                    case "hd1080":
+                        videoQuality = VideoQuality.HD1080;
+                        break;
+                }
+                AudioQuality audioQuality = default;
+                switch (format.audioQuality)
+                {
+                    case "AUDIO_QUALITY_LOW":
+                        audioQuality = AudioQuality.Low;
+                        break;
+                    case "AUDIO_QUALITY_MEDIUM":
+                        audioQuality = AudioQuality.Medium;
+                        break;
+                }
+                var mimeTypeSplit = mimeType.Split('/')[1];
+                var container = mimeTypeSplit.Split(';')[0];
+                var codecs = mimeType.Split('"')[1].Split(',');
+                var videoCodec = codecs[0];
+                var audioCodec = codecs[1].Trim();
+                streams.Add(new MuxedStream(url, width, height, fps, videoQuality, audioQuality, container, videoCodec, audioCodec));
+            }
+            foreach (var format in streamingData.adaptiveFormats)
+            {
+                var url = format.url ?? await Util.DecypherSignatureUrlAsync(VideoId, format.signatureCipher);
+                var mimeType = format.mimeType;
+                var mimeTypeSplit = mimeType.Split('/');
+                var type = mimeTypeSplit[0];
+                var mimeTypeSplit2 = mimeTypeSplit[1];
+                var container = mimeTypeSplit2.Split(';')[0];
+                var codec = mimeType.Split('"')[1];
+                Stream stream = null;
+                switch (type)
+                {
+                    case "audio":
+                        AudioQuality quality = default;
+                        switch (format.audioQuality)
+                        {
+                            case "AUDIO_QUALITY_LOW":
+                                quality = AudioQuality.Low;
+                                break;
+                            case "AUDIO_QUALITY_MEDIUM":
+                                quality = AudioQuality.Medium;
+                                break;
+                        }
+                        stream = new AudioStream(url, quality, container, codec);
+                        break;
+                    case "video":
+                        var width = format.width;
+                        var height = format.height;
+                        var fps = format.fps;
+                        VideoQuality qualityx = default;
+                        switch (format.quality)
+                        {
+                            case "tiny":
+                                qualityx = VideoQuality.Tiny;
+                                break;
+                            case "small":
+                                qualityx = VideoQuality.Small;
+                                break;
+                            case "medium":
+                                qualityx = VideoQuality.Medium;
+                                break;
+                            case "large":
+                                qualityx = VideoQuality.Large;
+                                break;
+                            case "hd720":
+                                qualityx = VideoQuality.HD720;
+                                break;
+                            case "hd1080":
+                                qualityx = VideoQuality.HD1080;
+                                break;
+                        }
+                        stream = new VideoStream(url, width, height, fps, qualityx, container, codec);
+                        break;
+                }
+                streams.Add(stream);
+            }
+
+            return streams.ToArray();
         }
     }
 }

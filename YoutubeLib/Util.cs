@@ -1,10 +1,13 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.AspNetCore.WebUtilities;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web;
 using YoutubeLib.Models;
 
 namespace YoutubeLib
@@ -89,6 +92,66 @@ namespace YoutubeLib
             return responseJson;
         }
 
+        public static async Task<string> DecypherSignatureUrlAsync(string videoID, string signatureCipher)
+        {
+            var parameters = QueryHelpers.ParseQuery(signatureCipher).SelectMany(x => x.Value, (col, value) => new KeyValuePair<string, string>(col.Key, value)).ToDictionary(x => x.Key, y => y.Value);
+            var signature = parameters["s"];
+            var parameter = parameters["sp"];
+            var url = parameters["url"];
+
+            var playerJS = await GetPlayerJSAsync(videoID);
+            var unscrambleFuncDef = new Regex(@"(?<=function\(a\){a=a\.split\(""""\);)[A-z0-9_$().,;]+(?=;return a\.join\(""""\)};)").Match(playerJS).Value;
+            var unscrambleCalls = unscrambleFuncDef.Split(';');
+            var unscramblerObjectName = unscrambleCalls[0].Split('.')[0];
+            var unscramblerObjectDef = new Regex($@"(?<=var {unscramblerObjectName}=\\{{).*?}}(?=}};)}}", RegexOptions.Singleline).Match(playerJS).Value;
+            var ops = new Dictionary<string, DecypherOperation>();
+
+            foreach (Match match in new Regex(@"[A-z0-9_$]+:function\([ab,]+\)\{.*?}(?=(,|$))", RegexOptions.Singleline).Matches(unscramblerObjectDef))
+            {
+                var split = match.Value.Split(';');
+                var name = split[0];
+                var def = split[1];
+                switch (def)
+                {
+                    case "function(a,b){a.splice(0,b)}":
+                        ops.Add(name, DecypherOperation.Splice);
+                        break;
+                    case "function(a){a.reverse()}":
+                        ops.Add(name, DecypherOperation.Reverse);
+                        break;
+                    case "function(a,b){var c=a[0];a[0]=a[b%a.length];a[b%a.length]=c}":
+                        ops.Add(name, DecypherOperation.Swap);
+                        break;
+                    default:
+                        throw new Exception($"Kyaa! Unrecognized decypher function {def}");
+                }
+            }
+
+            var splitSignature = signature.ToCharArray().ToList();
+            foreach (var call in unscrambleCalls)
+            {
+                var op = call.Split('.')[1].Split('(')[0];
+                var arg = int.Parse(new Regex(@"(?<=,)[0-9]+(?=\))").Match(call).Value);
+                switch (ops[op])
+                {
+                    case DecypherOperation.Splice:
+                        splitSignature.Take(arg);
+                        break;
+                    case DecypherOperation.Reverse:
+                        splitSignature.Reverse();
+                        break;
+                    case DecypherOperation.Swap:
+                        var temp = splitSignature[0];
+                        var i = arg % splitSignature.Count;
+                        splitSignature[0] = splitSignature[i];
+                        splitSignature[i] = temp;
+                        break;
+                }
+            }
+            var solvedSignature = new string(splitSignature.ToArray());
+            return $"{url}&{parameter}={HttpUtility.UrlEncode(solvedSignature)}";
+        }
+
         private static async Task<string> PostAPIAsync(string endpoint, string body)
         {
             var content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -126,5 +189,12 @@ namespace YoutubeLib
             cachedPlayerHTML.Add(videoID, html);
             return html;
         }
+    }
+
+    public enum DecypherOperation
+    {
+        Splice,
+        Reverse,
+        Swap
     }
 }

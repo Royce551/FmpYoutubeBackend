@@ -11,8 +11,18 @@ namespace TestProject
     {
         static async Task Main(string[] args)
         {
-            var x = await Video.FromVideoIDAsync("J3DZVg_3niE");
-            Console.WriteLine($"{x.Title}");
+            var url = Console.ReadLine();
+            var x = await Video.FromVideoIDAsync(url);
+            var y = await x.GetStreamsAsync();
+            foreach (var z in y)
+            {
+                Console.WriteLine("\n\n");
+                Console.WriteLine($"{z.URL}");
+                if (z is AudioStream aus)
+                    Console.WriteLine($"codec - {aus.Codec}  container - {aus.Container}");
+                else if (z is VideoStream vis)
+                    Console.WriteLine($"codec - {vis.Codec}  container - {vis.Container}");
+            }
             Console.ReadLine();
         }
     }

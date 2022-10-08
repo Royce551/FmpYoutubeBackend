@@ -99,6 +99,7 @@ namespace YoutubeLib.Models
         public string approxDurationMs { get; set; }
         public string audioSampleRate { get; set; }
         public int audioChannels { get; set; }
+        public string signatureCipher { get; set; }
     }
 
     public class Adaptiveformat
@@ -125,6 +126,7 @@ namespace YoutubeLib.Models
         public string audioSampleRate { get; set; }
         public int audioChannels { get; set; }
         public float loudnessDb { get; set; }
+        public string signatureCipher { get; set; }
     }
 
     public class Initrange
