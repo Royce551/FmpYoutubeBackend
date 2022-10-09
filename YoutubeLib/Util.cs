@@ -103,12 +103,12 @@ namespace YoutubeLib
             var unscrambleFuncDef = new Regex(@"(?<=function\(a\){a=a\.split\(""""\);)[A-z0-9_$().,;]+(?=;return a\.join\(""""\)};)").Match(playerJS).Value;
             var unscrambleCalls = unscrambleFuncDef.Split(';');
             var unscramblerObjectName = unscrambleCalls[0].Split('.')[0];
-            var unscramblerObjectDef = new Regex($@"(?<=var {unscramblerObjectName}=\\{{).*?}}(?=}};)}}", RegexOptions.Singleline).Match(playerJS).Value;
+            var unscramblerObjectDef = new Regex($@"(?<=var {unscramblerObjectName}={{).*?(?=}};)", RegexOptions.Singleline).Match(playerJS).Value;
             var ops = new Dictionary<string, DecypherOperation>();
 
             foreach (Match match in new Regex(@"[A-z0-9_$]+:function\([ab,]+\)\{.*?}(?=(,|$))", RegexOptions.Singleline).Matches(unscramblerObjectDef))
             {
-                var split = match.Value.Split(';');
+                var split = match.Value.Split(':');
                 var name = split[0];
                 var def = split[1];
                 switch (def)
@@ -135,7 +135,7 @@ namespace YoutubeLib
                 switch (ops[op])
                 {
                     case DecypherOperation.Splice:
-                        splitSignature.Take(arg);
+                        splitSignature.RemoveRange(0, arg);
                         break;
                     case DecypherOperation.Reverse:
                         splitSignature.Reverse();
